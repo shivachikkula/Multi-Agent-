@@ -17,6 +17,8 @@ from core.data.sql_store import SqlStore
 from core.data.vector_search import VectorSearchIndex
 from core.human_in_the_loop.approvals import ApprovalService
 from core.llm.base import LLMProvider
+from core.orchestrator.a2a import AgentToAgentBus
+from core.tools.a2a_tool import AskAgentTool
 from core.tools.calculator_tool import CalculatorTool
 from core.tools.finance_tools import CheckBudgetTool, GetExpenseReportTool, SubmitExpenseTool
 from core.tools.http_tool import HttpApiTool
@@ -58,14 +60,37 @@ async def build_tool_registry(sql: SqlStore, vector_index: VectorSearchIndex, se
 
 def build_agents(
     llm: LLMProvider, tools: ToolRegistry, approvals: ApprovalService, settings: Settings
-) -> dict[str, BaseAgent]:
+) -> tuple[dict[str, BaseAgent], AgentToAgentBus]:
+    """Builds every agent, then wires up the 'Agent-to-Agent Communication'
+    tools each agent can use to consult another agent as part of its own
+    reasoning (see ``FinanceAgent``'s ``ask_it_support`` tool). The tool is
+    registered into the *same* ``tools`` registry the agents already hold a
+    reference to, so it becomes available immediately even though the
+    agents were constructed first — ``ToolRegistry`` lookups are always
+    live, not snapshotted at agent construction time.
+    """
     agents: list[BaseAgent] = [
         ITSupportAgent(llm, tools),
         FinanceAgent(llm, tools, approvals, settings.hitl_finance_approval_threshold_usd),
         SalesAgent(llm, tools),
         HRAgent(llm, tools),
     ]
-    return {agent.id: agent for agent in agents}
+    agent_map = {agent.id: agent for agent in agents}
+
+    bus = AgentToAgentBus(agent_map)
+    tools.register(
+        AskAgentTool(
+            bus,
+            target_agent="it_support",
+            name="ask_it_support",
+            description=(
+                "Consult the IT Support agent about a systems/technical issue "
+                "(e.g. an outage or portal downtime) that might be affecting this request."
+            ),
+        )
+    )
+
+    return agent_map, bus
 
 
 def route(message: str, agents: dict[str, BaseAgent]) -> str:

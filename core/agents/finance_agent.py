@@ -21,9 +21,19 @@ class FinanceAgent(BaseAgent):
         "You are the Finance agent for an enterprise. Help employees check department budgets "
         "and submit expense reports. Use search_knowledge_base for policy questions. Expenses at "
         "or above the approval threshold will be routed to a human approver automatically — tell "
-        "the user that's happening rather than promising immediate reimbursement."
+        "the user that's happening rather than promising immediate reimbursement. If the user "
+        "reports a problem that sounds like a systems/technical issue rather than a finance "
+        "question (e.g. the expense portal won't load, a login error, an outage), use "
+        "ask_it_support to check with the IT Support agent before answering, instead of "
+        "guessing."
     )
-    tool_names = ["search_knowledge_base", "check_budget", "submit_expense", "get_expense_report"]
+    tool_names = [
+        "search_knowledge_base",
+        "ask_it_support",
+        "check_budget",
+        "submit_expense",
+        "get_expense_report",
+    ]
 
     def __init__(self, llm, tools, approvals: ApprovalService, threshold_usd: float) -> None:
         super().__init__(llm, tools)

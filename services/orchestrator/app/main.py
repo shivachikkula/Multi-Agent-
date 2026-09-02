@@ -28,7 +28,6 @@ from core.memory.short_term import ShortTermMemory
 from core.memory.state import StateStore
 from core.observability.logging_config import configure_logging
 from core.observability.tracing import configure_tracing
-from core.orchestrator.a2a import AgentToAgentBus
 from core.orchestrator.agent_registry import build_agents, build_tool_registry
 from core.orchestrator.goal_management import GoalManager
 from core.orchestrator.guardrails import GuardrailsEngine
@@ -58,7 +57,7 @@ async def lifespan(app: FastAPI):
 
     tools = await build_tool_registry(sql, vector_index, settings)
     approvals = ApprovalService(sql)
-    agents = build_agents(llm, tools, approvals, settings)
+    agents, a2a = build_agents(llm, tools, approvals, settings)
 
     short_term = ShortTermMemory(settings.redis_url)
     long_term = LongTermMemory(sql.session_factory)
@@ -67,7 +66,6 @@ async def lifespan(app: FastAPI):
     events = get_event_bus(settings)
 
     orchestrator = Orchestrator(agents, short_term, long_term, goals, guardrails, events)
-    a2a = AgentToAgentBus(agents)
 
     app.state.settings = settings
     app.state.sql = sql
