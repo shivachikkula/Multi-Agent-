@@ -187,21 +187,34 @@ container dependency lists.)
 
 ## Going to production on Azure
 
-Nothing here provisions Azure resources (no Bicep/Terraform is included).
-To point this app at real infrastructure:
+`infra/` has Bicep templates + a deploy script for the core production
+path: managed Postgres (Flexible Server) and Redis (Azure Cache) instead
+of containers, `gateway`/`orchestrator`/`worker` as Azure Container Apps
+pulling from a Container Registry via managed identity, secrets in Key
+Vault (resolved into the containers via Container Apps' native Key Vault
+secret references — no code changes needed for that part), and Log
+Analytics/App Insights wired in. Azure OpenAI is optional and off by
+default (`deployAzureOpenAI=false`), so the same template runs on the
+offline mock LLM until you're ready to flip it on.
 
-1. Deploy `services/gateway`, `services/orchestrator`, `services/worker` as
-   three Azure Container Apps (or AKS deployments / Azure Functions).
-2. Create the Azure resources named in the mapping table above as needed
-   (Azure OpenAI is the only one required to leave mock mode).
-3. Set each service's environment variables from `.env.example` — ideally
-   via Container Apps' native Key Vault secret references, or resolve them
-   in-process at boot with `core/security/keyvault.py`.
-4. Set `AZURE_USE_MANAGED_IDENTITY=true` and grant each Container App's
-   Managed Identity access to Azure OpenAI / Key Vault / Cosmos / Search /
-   Storage / Service Bus as needed, instead of shipping API keys.
-5. Put Azure API Management in front of the gateway (or replace the
-   gateway service with APIM policies directly) for enterprise-grade
-   authentication, quotas, and versioning.
-6. Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` for tracing/logs and scrape
-   each service's `/metrics` with Azure Monitor managed Prometheus.
+```bash
+RESOURCE_GROUP=multiagent-rg POSTGRES_ADMIN_PASSWORD='...' ./infra/deploy.sh
+```
+
+See `infra/README.md` for the full walkthrough, configuration reference,
+and — importantly — what's deliberately **not** included (no VNet/private
+endpoints, no APIM, one shared identity rather than per-service, Cosmos/AI
+Search/Blob Storage not provisioned even though the app's adapters for
+them exist). Beyond that:
+
+- Set `AZURE_USE_MANAGED_IDENTITY=true` (the Bicep does this automatically
+  when `deployAzureOpenAI=true`) and grant each Container App's identity
+  access to Cosmos / Search / Storage / Service Bus as needed, instead of
+  shipping API keys, if you add those resources.
+- Put real Azure API Management in front of the gateway (or replace it
+  with APIM policies directly) if you need enterprise-grade quotas and
+  versioning beyond what `services/gateway` implements itself.
+- Scrape each service's `/metrics` with Azure Monitor managed Prometheus
+  for the metrics half of observability (tracing/logs already flow to App
+  Insights once `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, which the
+  Bicep does for you).
