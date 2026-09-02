@@ -1,0 +1,12 @@
+[project]
+name = "multi-agent-platform"
+version = "0.1.0"
+description = "Multi-agent application implementing the Agentic AI Architecture on Azure reference diagram, with local fallbacks for every Azure service."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.setuptools]
+packages = ["core"]
