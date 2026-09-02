@@ -48,6 +48,24 @@ curl -H "X-API-Key: dev-local-key" -H "Content-Type: application/json" \
   http://localhost:8000/v1/approvals/<approval_id>/decide
 ```
 
+### Try agent-to-agent communication
+
+The Finance agent consults the IT Support agent on its own when a request
+sounds like a systems issue rather than a finance question — no special
+routing needed, it's just another tool in Finance's own reasoning loop:
+
+```bash
+curl -H "X-API-Key: dev-local-key" -H "Content-Type: application/json" \
+  -d '{"user_id":"bob","message":"I think there is a system outage, is the vpn down? asking for it support before I submit my expense"}' \
+  http://localhost:8000/v1/chat
+# -> tool_calls includes "ask_it_support", whose result embeds IT Support's
+#    own check_system_status call: "Done. check_system_status -> vpn: operational"
+```
+
+`POST /a2a/ask` on the orchestrator (`:8001`, not behind the gateway) is
+also available for testing agent-to-agent calls directly. See
+`tests/test_a2a.py` for the automated coverage of both paths.
+
 Or use `reviewer_ui/index.html` — a static approve/reject console for the
 same API.
 
@@ -71,7 +89,7 @@ environment variables are set (see `.env.example`).
 | ↳ Planning & Reasoning, Tool Selection | `core/agents/base.py` (`BaseAgent.run`) | — | — |
 | ↳ Memory & Context | `core/memory/` | — | — |
 | ↳ Goal Management | `core/orchestrator/goal_management.py` | — | — |
-| ↳ Agent-to-Agent Communication | `core/orchestrator/a2a.py` (`POST /a2a/ask`) | — | — |
+| ↳ Agent-to-Agent Communication | `core/orchestrator/a2a.py` (`POST /a2a/ask` for direct testing) + `core/tools/a2a_tool.py` (`ask_it_support`, wired into `FinanceAgent` by `build_agents`) | — | — |
 | ↳ Guardrails & Safety | `core/orchestrator/guardrails.py` | Regex/keyword heuristic checker | Azure AI Content Safety (`core/llm/content_safety.py`) |
 | **Agents (Examples)** | `core/agents/` | — | — |
 | ↳ IT Support Agent (full) | `core/agents/it_support_agent.py` + `core/tools/it_tools.py` | — | — |
