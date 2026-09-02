@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Human in the Loop — Approvals</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; background: #0b0f14; color: #e6edf3; }
+  h1 { font-size: 1.3rem; }
+  .bar { display: flex; gap: .5rem; margin-bottom: 1rem; }
+  input { background: #161b22; border: 1px solid #30363d; color: #e6edf3; padding: .4rem .6rem; border-radius: 6px; flex: 1; }
+  button { background: #238636; border: none; color: white; padding: .4rem .8rem; border-radius: 6px; cursor: pointer; }
+  button.reject { background: #da3633; }
+  button.refresh { background: #1f6feb; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: .75rem; }
+  .meta { color: #8b949e; font-size: .85rem; margin-bottom: .5rem; }
+  .actions { display: flex; gap: .5rem; margin-top: .75rem; }
+  pre { white-space: pre-wrap; background: #0d1117; padding: .5rem; border-radius: 6px; font-size: .85rem; }
+  .empty { color: #8b949e; text-align: center; padding: 2rem; }
+</style>
+</head>
+<body>
+  <h1>Human in the Loop — Pending Approvals</h1>
+  <div class="bar">
+    <input id="gateway" placeholder="Gateway base URL" value="http://localhost:8000" />
+    <input id="apiKey" placeholder="X-API-Key" value="dev-local-key" />
+    <button class="refresh" onclick="load()">Refresh</button>
+  </div>
+  <div id="list"><div class="empty">Loading…</div></div>
+
+<script>
+async function api(path, opts = {}) {
+  const base = document.getElementById('gateway').value.replace(/\/$/, '');
+  const key = document.getElementById('apiKey').value;
+  const res = await fetch(base + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': key, ...(opts.headers || {}) },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function load() {
+  const list = document.getElementById('list');
+  try {
+    const approvals = await api('/v1/approvals');
+    if (!approvals.length) {
+      list.innerHTML = '<div class="empty">No pending approvals 🎉</div>';
+      return;
+    }
+    list.innerHTML = approvals.map(a => `
+      <div class="card" id="card-${a.id}">
+        <div class="meta">${a.id} · agent: ${a.agent} · action: ${a.action} · session: ${a.session_id}</div>
+        <div>${a.reason}</div>
+        <pre>${JSON.stringify(a.payload, null, 2)}</pre>
+        <div class="actions">
+          <button onclick="decide('${a.id}', true)">Approve</button>
+          <button class="reject" onclick="decide('${a.id}', false)">Reject</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="empty">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function decide(id, approved) {
+  await api(`/v1/approvals/${id}/decide`, {
+    method: 'POST',
+    body: JSON.stringify({ approved, decided_by: 'reviewer-ui' }),
+  });
+  load();
+}
+
+load();
+</script>
+</body>
+</html>
